@@ -41,3 +41,23 @@ class Job(JobBase):
 class HiredEmployee(HiredEmployeeBase):
     class Config:
         orm_mode = True
+
+class QuarterlyHires(BaseModel):
+    department: str
+    job: str
+    Q1: int
+    Q2: int
+    Q3: int
+    Q4: int
+
+    class Config:
+        orm_mode = True 
+
+
+class DepartmentHires(BaseModel):
+    id: int
+    department: str
+    hired: int
+
+    class Config:
+        orm_mode = True 

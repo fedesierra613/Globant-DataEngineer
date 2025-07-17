@@ -6,6 +6,7 @@ findspark.init()
 
 from fastapi import FastAPI, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import List
 import os
 import sys
@@ -88,3 +89,70 @@ def create_jobs_batch(jobs: List[schemas.JobCreate] = Body(..., max_items=1000),
 def create_employees_batch(employees: List[schemas.HiredEmployeeCreate] = Body(..., max_items=1000), db: Session = Depends(get_db)):
     count = crud.batch_insert(db, employees, models.HiredEmployee)
     return {"message": f"Se insertaron {count} empleados exitosamente."}
+
+
+@app.get("/metrics/quarterly_hires", response_model=List[schemas.QuarterlyHires], tags=["Metrics"])
+def get_quarterly_hires_report(db: Session = Depends(get_db)):
+    """
+    Requerimiento 1: Número de empleados contratados para cada trabajo y
+    departamento en 2021, dividido por trimestre.
+    """
+    query = text("""
+        WITH hires_2021 AS (
+            SELECT
+                d.department,
+                j.job,
+                CAST(strftime('%m', h.datetime) AS INTEGER) AS hire_month
+            FROM hired_employees h
+            JOIN departments d ON h.department_id = d.id
+            JOIN jobs j ON h.job_id = j.id
+            WHERE strftime('%Y', h.datetime) = '2021'
+        )
+        SELECT
+            department,
+            job,
+            SUM(CASE WHEN hire_month BETWEEN 1 AND 3 THEN 1 ELSE 0 END) AS Q1,
+            SUM(CASE WHEN hire_month BETWEEN 4 AND 6 THEN 1 ELSE 0 END) AS Q2,
+            SUM(CASE WHEN hire_month BETWEEN 7 AND 9 THEN 1 ELSE 0 END) AS Q3,
+            SUM(CASE WHEN hire_month BETWEEN 10 AND 12 THEN 1 ELSE 0 END) AS Q4
+        FROM hires_2021
+        GROUP BY department, job
+        ORDER BY department, job;
+    """)
+    result = db.execute(query).mappings().all()
+    return result
+
+
+@app.get("/metrics/departments_above_average", response_model=List[schemas.DepartmentHires], tags=["Metrics"])
+def get_departments_above_average_hires(db: Session = Depends(get_db)):
+    """
+    Requerimiento 2: Departamentos que contrataron más empleados que la media
+    de contrataciones de todos los departamentos en 2021.
+    """
+    query = text("""
+        WITH department_hires_2021 AS (
+            -- Paso 1: Contar las contrataciones por departamento en 2021
+            SELECT
+                department_id,
+                COUNT(id) as hired_count
+            FROM hired_employees h -- <--- ALIAS AÑADIDO AQUÍ
+            WHERE strftime('%Y', h.datetime) = '2021'
+            GROUP BY department_id
+        ),
+        average_hires AS (
+            -- Paso 2: Calcular la media de contrataciones a partir del paso anterior
+            SELECT AVG(hired_count) as avg_hired
+            FROM department_hires_2021
+        )
+        -- Paso 3: Seleccionar los departamentos cuyo conteo supera la media
+        SELECT
+            d.id,
+            d.department,
+            dh.hired_count AS hired
+        FROM department_hires_2021 dh
+        JOIN departments d ON dh.department_id = d.id
+        WHERE dh.hired_count > (SELECT avg_hired FROM average_hires)
+        ORDER BY hired DESC;
+    """)
+    result = db.execute(query).mappings().all()
+    return result
