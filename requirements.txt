@@ -3,4 +3,6 @@ fastapi
 uvicorn[standard]
 SQLAlchemy
 pyspark
-findspark 
+findspark
+pytest
+httpx
