@@ -26,7 +26,7 @@ Esta es una solución para la Sección 1 del reto de codificación de Ingenierí
 
 1.  **Clonar el repositorio:**
     ```bash
-    git clone https://github.com/fedesierra613/Globant-Challenge
+    git clone https://github.com/fedesierra613/Globant-DataEngineer
     cd globant-challenge
     ```
 
